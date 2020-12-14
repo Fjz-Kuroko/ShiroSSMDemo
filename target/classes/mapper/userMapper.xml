@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- namespace：该mapper.xml映射文件的唯一标识 -->
+<mapper namespace="pers.kuroko.dao.UserDao">
+    <select id="selectUserByUsername" parameterType="String" resultType="User">
+        select * from user where uname = #{uname}
+    </select>
+    <insert id="addUser" parameterType="User">
+        insert into user (uname, upwd, role) values (#{uname}, #{upwd}, #{role})
+    </insert>
+</mapper>

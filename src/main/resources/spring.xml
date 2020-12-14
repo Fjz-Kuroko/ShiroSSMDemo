@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/context https://www.springframework.org/schema/context/spring-context.xsd">
+
+    <!-- 加载数据库配置文件db.properties -->
+    <context:property-placeholder location="classpath:db.properties" />
+
+    <!-- 开启注解扫描 -->
+    <context:component-scan base-package="pers.kuroko.service" />
+    <context:component-scan base-package="pers.kuroko.realm" />
+
+    <!-- 配置数据源信息 -->
+    <bean id="dataSource" class="org.apache.commons.dbcp.BasicDataSource">
+        <!-- 配置数据库信息 -->
+        <property name="driverClassName" value="${driver}"/>
+        <property name="url" value="${url}"/>
+        <property name="username" value="${user}"/>
+        <property name="password" value="${password}"/>
+    </bean>
+
+    <!-- 在SpringIOC容器中 创建MyBatis核心类 SqlSessionFactory -->
+    <bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+        <!-- 配置数据源 -->
+        <property name="dataSource" ref="dataSource"/>
+        <!-- 加载MyBatis全局配置文件 -->
+        <property name="configLocation" value="classpath:sqlMapConfig.xml" />
+        <!-- 加载 Mapper.xml路径 -->
+        <property name="mapperLocations" value="classpath:mapper/*.xml"/>
+    </bean>
+
+    <!-- 配置mapper相关扫描器 将MyBatis的SQLSessionFactory交给Spring -->
+    <bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+        <!-- 指定批量产生mapper的包 -->
+        <property name="basePackage" value="pers.kuroko.dao"/>
+        <property name="sqlSessionFactoryBeanName" value="sqlSessionFactory"/>
+    </bean>
+
+    <!--
+        1.配置securityManager！
+     -->
+    <bean id="securityManager" class="org.apache.shiro.web.mgt.DefaultWebSecurityManager">
+        <property name="cacheManager" ref="cacheManager"/>
+<!--        <property name="realm" ref="jdbcRealm"/>-->
+        <property name="authenticator" ref="authenticator" />
+        <property name="realms">
+            <list>
+                <ref bean="jdbcRealm" />
+            </list>
+        </property>
+    </bean>
+
+    <!--
+        2.配置cacheManager，缓存
+        2.1 需要加入ehcache的jar以及配置文件
+     -->
+    <bean id="cacheManager" class="org.apache.shiro.cache.ehcache.EhCacheManager">
+        <property name="cacheManagerConfigFile" value="classpath:ehcache.xml"/>
+    </bean>
+
+    <bean id="authenticator"
+            class="org.apache.shiro.authc.pam.ModularRealmAuthenticator">
+        <property name="authenticationStrategy">
+            <bean class="org.apache.shiro.authc.pam.AtLeastOneSuccessfulStrategy"/>
+        </property>
+    </bean>
+
+    <!--
+        3.配置realm
+        3.1 直接配置了实现了Realm接口的bean
+    -->
+    <bean id="jdbcRealm" class="pers.kuroko.realm.ShiroRealm">
+        <property name="credentialsMatcher">
+            <bean class="org.apache.shiro.authc.credential.HashedCredentialsMatcher">
+                <property name="hashAlgorithmName" value="MD5" />
+                <property name="hashIterations" value="1024" />
+                <property name="storedCredentialsHexEncoded" value="true" />
+            </bean>
+        </property>
+    </bean>
+
+    <!--
+        4. 配置lifecycleBeanPostProcessor，可以自动地来调用配置在Spring Ioc容器中shiro bean的生命周期方法
+    -->
+    <bean id="lifecycleBeanPostProcessor" class="org.apache.shiro.spring.LifecycleBeanPostProcessor"/>
+
+    <!--
+        5. 启用IOC容器中使用shiro的注解，但必须配置lifecycleBeanPostProcessor之后才可以使用
+    -->
+    <bean class="org.springframework.aop.framework.autoproxy.DefaultAdvisorAutoProxyCreator"
+          depends-on="lifecycleBeanPostProcessor"/>
+    <bean class="org.apache.shiro.spring.security.interceptor.AuthorizationAttributeSourceAdvisor">
+        <property name="securityManager" ref="securityManager"/>
+    </bean>
+
+    <!--
+        6. 配置shiroFilter
+        6.1 id必须和web.xml文件中配置的DelegatingFilterProxy的<filter-name>一致;
+            若不一致，则会抛出异常，因为shiro回来IoC容器中查找和<filter-name>名字对应的filter bean
+        6.2
+    -->
+    <bean id="shiroFilter" class="org.apache.shiro.spring.web.ShiroFilterFactoryBean">
+        <property name="securityManager" ref="securityManager"/>
+        <property name="loginUrl" value="/view/login.jsp"/><!--登录页面-->
+        <property name="successUrl" value="/index.jsp"/><!--登录成功页面-->
+        <property name="unauthorizedUrl" value="/view/unauthorized.jsp"/><!--没有权限页面-->
+<!--        <property name="filterChainDefinitionMap" ref="filterChainDefinitionMap" />-->
+        <!--
+            配置哪些页面需要受保护
+            以及访问这些页面需要的权限.
+            1. anon 可以被匿名访问
+            2. authc 必须认证（登录）后才访问
+            3. logout 登出
+            3. 匹配原则是第一次优先匹配
+            4. roles 角色过滤器
+        -->
+        <property name="filterChainDefinitionMap" ref="filterChainDefinitionMap" />
+    </bean>
+
+    <!-- 配置一个bean，该bean实际上是一个Map，通过实例工厂方法的方式 -->
+    <bean id="filterChainDefinitionMap" factory-bean="filterChainDefinitionMapBuilder"
+          factory-method="buildFilterChainDefinitionMap" />
+    <bean id="filterChainDefinitionMapBuilder" class="pers.kuroko.factory.FilterChainDefinitionMapBuilder" />
+
+</beans>
